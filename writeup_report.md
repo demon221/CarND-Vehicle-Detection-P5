@@ -18,7 +18,7 @@ The goals / steps of this project are the following:
 [image5]: ./output_images/YCrCb_result.png
 [image6]: ./output_images/sliding_window.png
 [image7]: ./output_images/bboxes_and_heat.png
-[image8]: ./output_images/output_bboxes.png
+[image8]: ./output_images/vehicle_detection_pipeline.png
 [video1]: ./project_video.mp4
 
 ### [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
@@ -63,7 +63,7 @@ The scikit-image `hog()` function was used in a single color channel as input,
 
 Compared to extracting single color channel, extracting all three channels can improve the test accuracy by about 3-4%.
 
-Here is an example using the `HSV` color space and HOG parameters of `orientations=9`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+Here is an example using the HSV color space and HOG parameters of `orientations=9`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
 
 ![alt text][image2]
 
@@ -123,6 +123,8 @@ Here is a feature value of one random image:
 
 ![alt text][image3]
 
+It can be seen that in the end of color histogram features, the feature value is significantly high. After the StandardScaler the features combination became to the same order of magnitude.
+
 In the #9 code cell, I trained the classifier with a linear SVM.
 From the training data, the features are extracted from 17,760 images, about half containing vehicles and half not containing vehicles. These features are labeled as "0" or "1" (car or notcar) and passed into a Support Vector Machine that linearly separates the data. Train-test data split method is used here to split 20% data into test data.
 
@@ -134,67 +136,78 @@ The classifier with data were stored in the `svc_pickle.p` pickle file.
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-In the section titled "Method for Using Classifier to Detect Cars in an Image" of the #11 code cell, I adapted the method `find_cars()` from the lesson materials. The method combines HOG feature extraction with a sliding window search. But rather than perform feature extraction on each window individually which can be time consuming, the HOG features are extracted for the entire image and then these full-image features are sub-sampling according to the size of the window and then fed to the classifier.
+In the section titled "Method for Using Classifier to Detect Cars in an Image" of the #11 and #12 code cell, I adapted the method `find_cars()` from the lesson materials. The method combines HOG feature extraction with a sliding window search. But rather than perform feature extraction on each window individually which can be time consuming, the HOG features are extracted for the entire image and then these full-image features are sub-sampling according to the size of the window and then fed to the classifier.
 
 The method performs the classifier prediction on the HOG features for each window region and returns a list of rectangle objects corresponding to the windows that generated a positive ("car") prediction.
 
 The y_start_stop value of sliding window roi is set to [**400**, **650**] to ignore the sky, trees and car header. The scale value for sliding window is **1.5**.
 
-
 The image below shows the attempt at using find_cars on one of the test images by HSV color space and YCrCb color space, using a single window size:
 
-HSV:
+* with HSV color space features:
 
 ![alt text][image4]
 
-YCrCb:
+* with YCrCb color space features:
 
 ![alt text][image5]
 
-It can be seen that YCrCb has better result of the test images. Here are all the sliding window results for all the test images:
-
-![alt text][image6]
+It can be seen that YCrCb has better result of the test images.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.
+Finally I searched with a single function that can extract features using hog sub-sampling, using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.
 
-In this step, I basically generate a list of sliding windows, then apply a SVM classifier to the resized window. If the prediction is positive, then add one to a heatmap. To remove false positive, I apply a threshold to the heatmap. Then I use scipy.ndimage.measurements.label to generate a bounding box around the car.
+Here are all the sliding window results for all the test images:
 
-Also, I saved the positions of true detections in each frame of the video. From the true detections I created a heatmap and then thresholded that map to identify vehicle positions:
+![alt text][image6]
 
-![alt text][image7]
+The optimization of the SVM classifier can be referred in the SVM training approach. Other optimization techniques included changes to window sizing and overlap as described above, and lowering the heat-map threshold to improve accuracy of the detection (higher threshold values tended to underestimate the size of the vehicle).
+
 -------------------
 
 ### Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
+#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
 
+Here's a [link to my video result](https://youtu.be/Iue9fThCfwU) .
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+#### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+##### - Heat-map Detection
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+The code for heat-map detection is in the cells #13 to #16.
 
-### Here are six frames and their corresponding heatmaps:
+To solving multiple detections and false positives, I applied a heat-map based on the result of sliding window. To generate this heat-map, I simply added "heat" (+=1) in `add_heat()` for all pixels within windows where a positive detection is reported by the SVM classifier.
+Then the "hot" parts of the map are where the cars are, and by imposing a threshold `apply_threshold()`, the false positives with less heat can be rejected.
 
-![alt text][image5]
+With the `scipy.ndimage.measurements.label()` function to identify individual blobs in the heat-map, the final detection area is set to the extremities of each identified label:
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
 ![alt text][image7]
 
+Here are the resulting bounding boxes of the six test images:
+
+![alt text][image8]
+
+##### - Vehicle Detection Tracking
+
+The code for vehicle detection tracking is in the cells #19 to #20.
+
+In order to produce a more stable and robust video output, I create an class called `Vehicle_Detect()`.
+
+This class can save the history bounding boxes into `prev_boxs` from the previous 10 frames of the video. When one vehicle feature is detected, rather than performing the heat-map/threshold/label steps for the current frame's detections, the detections for the past 10 frames are combined and added to the heat-map.
+
+This method is a kind of time filter for the vehicle detection heat-map. The threshold for the heat-map is set to `1 + len(det.prev_boxs)//2`. This adaptive threshold was found to perform well for this project video.
 
 
----
+--------------
 
-###Discussion
+### Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+1. Extract HOG feature once and use it for all windows definitely is a more efficient method for doing the sliding window approach. It saves me lot of time for trying parameters such as window size and overlap.
+2. Heat-map method will have better effort when keep track of most recent N frames detection results than only use one frame.
+3. When one vehicle just appears from behind, or is covered by another vehicle, the detection may be not in time. With more training image of partly vehicles maybe have better performance for it. Prediction will be more robust with data augmentation trick, also the heat-map threshold shall be adapted.
+4. For further usage for vehicle detection, determine vehicle location and speed will be more useful in self-driving. So how to extract this information from the bounding box and how to optimization will be questions in future.
 

@@ -195,6 +195,20 @@ The code for vehicle detection tracking is in the cells #19 to #20.
 
 In order to produce a more stable and robust video output, I create an class called `Vehicle_Detect()`.
 
+```python
+# Define a class to store data from video
+class Vehicle_Detect():
+    def __init__(self):
+        # history of boxs in previous n frames
+        self.prev_boxs = []
+
+    def add_boxs(self, boxs):
+        self.prev_boxs.append(boxs)
+        if len(self.prev_boxs) > 10:
+            # throw out oldest rectangle set(s)
+            self.prev_boxs = self.prev_boxs[len(self.prev_boxs)-10:]
+```
+
 This class can save the history bounding boxes into `prev_boxs` from the previous 10 frames of the video. When one vehicle feature is detected, rather than performing the heat-map/threshold/label steps for the current frame's detections, the detections for the past 10 frames are combined and added to the heat-map.
 
 This method is a kind of time filter for the vehicle detection heat-map. The threshold for the heat-map is set to `1 + len(det.prev_boxs)//2`. This adaptive threshold was found to perform well for this project video.
